@@ -1,0 +1,1872 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>競合リサーチ Hub</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+/* ===========================
+   RESET & VARIABLES
+=========================== */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root{
+  /* ベース */
+  --bg:           #f5f5f5;
+  --surface:      #ffffff;
+  --surface-soft: #f7f7f7;
+  --surface-hover:#fafafa;
+  --border:       #e5e5e5;
+  --border-dark:  #cccccc;
+
+  /* テキスト */
+  --text:         #111111;
+  --text-soft:    #444444;
+  --text-muted:   #888888;
+
+  /* Amazonオレンジ */
+  --primary:      #ff9900;
+  --primary-hover:#e68a00;
+  --primary-light:#fff8ee;
+  --primary-dark: #cc7a00;
+
+  /* アクセント */
+  --green:        #2e7d32;
+  --green-light:  #e8f5e9;
+  --red:          #c62828;
+  --red-light:    #ffebee;
+  --blue:         #1565c0;
+  --blue-light:   #e3f2fd;
+
+  /* タイポ */
+  --sans:  'Noto Sans JP', sans-serif;
+  --mono:  'IBM Plex Mono', monospace;
+
+  /* 形状 */
+  --r:   6px;
+  --r-lg:10px;
+  --r-xl:14px;
+
+  /* 影 */
+  --sh-xs: 0 1px 3px rgba(0,0,0,.06);
+  --sh-sm: 0 2px 8px rgba(0,0,0,.08);
+  --sh-md: 0 4px 16px rgba(0,0,0,.10);
+  --sh-hover: 0 6px 20px rgba(0,0,0,.13);
+}
+
+html{font-size:14px}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:var(--sans);
+  font-size:14px;
+  line-height:1.65;
+  -webkit-font-smoothing:antialiased;
+  min-height:100vh;
+}
+
+/* ===========================
+   LAYOUT
+=========================== */
+.app{display:grid;grid-template-columns:252px 1fr;min-height:100vh}
+@media(max-width:1100px){.app{grid-template-columns:210px 1fr}}
+
+/* ===========================
+   SIDEBAR
+=========================== */
+.sidebar{
+  background:var(--surface);
+  border-right:1px solid var(--border);
+  display:flex;flex-direction:column;
+  position:sticky;top:0;height:100vh;
+  overflow-y:auto;
+}
+
+.sidebar-top{
+  padding:18px 16px 14px;
+  border-bottom:1px solid var(--border);
+  background:var(--surface);
+}
+.logo{
+  font-family:var(--mono);
+  font-size:11px;font-weight:500;
+  color:var(--primary-dark);
+  letter-spacing:.1em;text-transform:uppercase;
+  margin-bottom:2px;
+}
+.logo-sub{font-size:11px;color:var(--text-muted);font-family:var(--mono)}
+
+/* サイドバーアクション */
+.sb-actions{
+  padding:12px 14px;
+  display:flex;flex-direction:column;gap:6px;
+  border-bottom:1px solid var(--border);
+  background:var(--surface-soft);
+}
+.sb-btn{
+  width:100%;
+  background:var(--surface);
+  border:1px solid var(--border-dark);
+  color:var(--text-soft);
+  padding:8px 12px;
+  border-radius:var(--r);
+  font-family:var(--sans);
+  font-size:13px;font-weight:500;
+  cursor:pointer;text-align:left;
+  transition:all .15s;
+  display:flex;align-items:center;gap:8px;
+  box-shadow:var(--sh-xs);
+}
+.sb-btn:hover{
+  background:var(--primary-light);
+  border-color:var(--primary);
+  color:var(--primary-dark);
+}
+.sb-btn:disabled{opacity:.5;cursor:not-allowed}
+.sb-btn-solid{
+  background:var(--primary);
+  border-color:var(--primary);
+  color:#fff;font-weight:600;
+}
+.sb-btn-solid:hover{
+  background:var(--primary-hover);
+  border-color:var(--primary-hover);
+  color:#fff;
+}
+.btn-spinner{
+  display:none;width:11px;height:11px;
+  border:2px solid currentColor;
+  border-top-color:transparent;
+  border-radius:50%;
+  animation:spin .7s linear infinite;
+  flex-shrink:0;
+}
+.btn.loading .btn-spinner,
+.sb-btn.loading .btn-spinner{display:inline-block}
+.btn.loading .btn-label,
+.sb-btn.loading .btn-label{opacity:.7}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* プロジェクトツリー */
+.sb-section{padding:12px 14px 10px;flex:1}
+.sb-label{
+  font-size:10px;color:var(--text-muted);
+  text-transform:uppercase;letter-spacing:.12em;
+  font-family:var(--mono);font-weight:600;
+  margin-bottom:8px;
+}
+
+.proj-list{display:flex;flex-direction:column;gap:2px}
+.proj-item{border-radius:var(--r);overflow:visible}
+.proj-header{
+  display:flex;align-items:center;gap:7px;
+  padding:9px 10px;cursor:pointer;
+  border-radius:var(--r);
+  border-left:3px solid transparent;
+  transition:all .15s;
+}
+.proj-header:hover{background:var(--primary-light);border-left-color:var(--primary)}
+.proj-header.active{
+  background:var(--primary-light);
+  border-left-color:var(--primary);
+}
+.proj-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.proj-name{
+  font-size:13px;font-weight:600;flex:1;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  color:var(--text);
+}
+.proj-count{
+  font-size:10px;font-family:var(--mono);
+  color:var(--text-muted);
+  background:var(--surface-soft);
+  padding:1px 6px;border-radius:4px;flex-shrink:0;
+}
+.proj-header.active .proj-count{
+  background:var(--primary-light);
+  color:var(--primary-dark);
+}
+.proj-actions{display:flex;gap:2px;opacity:0;transition:opacity .12s}
+.proj-header:hover .proj-actions{opacity:1}
+.proj-act-btn{
+  background:transparent;border:none;cursor:pointer;
+  color:var(--text-muted);font-size:11px;
+  padding:2px 5px;border-radius:4px;transition:all .1s;
+}
+.proj-act-btn:hover{color:var(--text);background:var(--border)}
+.proj-chevron{font-size:9px;color:var(--text-muted);transition:transform .15s;flex-shrink:0}
+.proj-chevron.open{transform:rotate(90deg)}
+
+.asin-list{padding:2px 0 4px 22px;display:flex;flex-direction:column;gap:2px}
+.asin-item{
+  padding:6px 10px;border-radius:var(--r);
+  cursor:pointer;font-size:12px;
+  font-family:var(--mono);color:var(--text-muted);
+  border-left:3px solid transparent;
+  transition:all .12s;
+  display:flex;align-items:center;gap:5px;
+  white-space:nowrap;overflow:hidden;
+}
+.asin-item:hover{
+  background:var(--primary-light);
+  color:var(--text);
+  border-left-color:var(--primary);
+}
+.asin-item.active{
+  background:var(--primary-light);
+  color:var(--primary-dark);
+  font-weight:600;
+  border-left-color:var(--primary);
+}
+.asin-badge{
+  font-size:10px;background:var(--surface-soft);
+  padding:1px 5px;border-radius:3px;
+  color:var(--text-muted);flex-shrink:0;
+  max-width:60px;overflow:hidden;text-overflow:ellipsis;
+}
+.new-asin-btn{
+  padding:6px 10px;border-radius:var(--r);
+  cursor:pointer;font-size:12px;font-family:var(--mono);
+  color:var(--text-muted);transition:all .12s;
+  display:flex;align-items:center;gap:5px;
+  background:transparent;border:none;width:100%;text-align:left;
+}
+.new-asin-btn:hover{color:var(--primary);background:var(--primary-light)}
+
+/* ステータスバー */
+.sb-status{
+  padding:10px 14px;
+  border-top:1px solid var(--border);
+  font-size:11px;font-family:var(--mono);
+  color:var(--text-muted);
+  background:var(--surface-soft);
+}
+.sb-status-row{display:flex;align-items:center;gap:5px}
+.status-dot{width:6px;height:6px;border-radius:50%;background:var(--text-muted)}
+.status-dot.ok{background:var(--green)}
+.status-dot.err{background:var(--red)}
+.status-dot.sync{background:var(--primary);animation:pulse 1s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* ===========================
+   MAIN
+=========================== */
+.main{display:flex;flex-direction:column;min-width:0;background:var(--bg)}
+
+/* トップバー */
+.topbar{
+  padding:12px 24px;
+  border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:10px;
+  background:var(--surface);
+  position:sticky;top:0;z-index:10;
+  box-shadow:var(--sh-sm);
+}
+.breadcrumb{
+  font-size:13px;color:var(--text-muted);flex:1;
+  display:flex;align-items:center;gap:6px;
+  font-family:var(--mono);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.breadcrumb span{color:var(--text);font-weight:600}
+.breadcrumb .bsep{color:var(--border-dark)}
+
+/* タブ */
+.tabs{
+  display:flex;padding:0 24px;
+  border-bottom:2px solid var(--border);
+  background:var(--surface);gap:0;
+}
+.tab{
+  padding:11px 18px;
+  font-size:13px;font-weight:500;
+  color:var(--text-muted);cursor:pointer;
+  border-bottom:3px solid transparent;
+  margin-bottom:-2px;
+  transition:all .15s;
+  display:flex;align-items:center;gap:6px;
+  white-space:nowrap;
+}
+.tab:hover{color:var(--text);background:var(--surface-soft)}
+.tab.active{
+  color:var(--text);
+  border-bottom-color:var(--primary);
+  font-weight:600;
+}
+.tab-count{
+  font-size:11px;background:var(--surface-soft);
+  padding:1px 6px;border-radius:4px;
+  color:var(--text-muted);font-family:var(--mono);
+}
+.tab.active .tab-count{
+  background:var(--primary-light);
+  color:var(--primary-dark);
+}
+
+/* コンテンツ */
+.content{padding:24px;flex:1}
+@media(max-width:1100px){.content{padding:16px}}
+
+/* ===========================
+   BUTTONS
+=========================== */
+.btn{
+  padding:8px 16px;border-radius:var(--r);
+  font-family:var(--sans);font-size:13px;font-weight:500;
+  cursor:pointer;
+  border:1px solid var(--border-dark);
+  background:var(--surface);color:var(--text);
+  transition:all .15s;
+  display:inline-flex;align-items:center;gap:7px;
+  white-space:nowrap;box-shadow:var(--sh-xs);
+}
+.btn:hover{background:var(--surface-soft);border-color:var(--border-dark);box-shadow:var(--sh-sm)}
+.btn:active:not(:disabled){transform:scale(.98)}
+
+.btn-primary{
+  background:var(--primary);
+  color:#fff;border-color:var(--primary);font-weight:600;
+}
+.btn-primary:hover{background:var(--primary-hover);border-color:var(--primary-hover);color:#fff}
+
+.btn-green{background:var(--green);color:#fff;border-color:var(--green)}
+.btn-green:hover{background:#1b5e20;border-color:#1b5e20;color:#fff}
+
+.btn-danger{color:var(--red);border-color:var(--border);background:var(--surface)}
+.btn-danger:hover{background:var(--red-light);border-color:var(--red)}
+
+.btn-sm{padding:5px 12px;font-size:12px}
+.btn-xs{padding:3px 8px;font-size:11px}
+.btn:disabled{opacity:.5;cursor:not-allowed;pointer-events:none}
+.btn.loading{pointer-events:none}
+.btn-ok{background:var(--green)!important;border-color:var(--green)!important;color:#fff!important}
+.btn-err{background:var(--red)!important;border-color:var(--red)!important;color:#fff!important}
+
+/* ===========================
+   PANELS
+=========================== */
+.panel{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--r-lg);
+  overflow:hidden;margin-bottom:16px;
+  box-shadow:var(--sh-xs);
+  transition:box-shadow .15s;
+}
+.panel:hover{box-shadow:var(--sh-sm)}
+.panel-header{
+  padding:11px 16px;
+  border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:9px;
+  background:var(--surface-soft);
+}
+.panel-num{
+  font-family:var(--mono);font-size:10px;color:var(--text-muted);
+  background:var(--border);padding:2px 7px;border-radius:4px;font-weight:600;
+}
+.panel-title{font-size:14px;font-weight:600;flex:1;color:var(--text)}
+.panel-body{padding:18px}
+
+/* ===========================
+   INPUT
+=========================== */
+.input{
+  background:var(--surface);
+  border:1px solid var(--border-dark);
+  border-radius:var(--r);
+  padding:9px 13px;
+  color:var(--text);
+  font-family:var(--sans);font-size:14px;
+  outline:none;
+  transition:border-color .15s,box-shadow .15s;
+  width:100%;
+}
+.input:focus{
+  border-color:var(--primary);
+  box-shadow:0 0 0 3px rgba(255,153,0,.15);
+}
+.input::placeholder{color:var(--text-muted)}
+textarea.input{resize:vertical;line-height:1.7}
+.input.is-error{border-color:var(--red)}
+.input.is-error:focus{box-shadow:0 0 0 3px rgba(198,40,40,.15)}
+.field-error{font-size:12px;color:var(--red);margin-top:4px;display:none;font-weight:500}
+.field-error.show{display:block}
+
+/* ===========================
+   UPLOAD
+=========================== */
+.upload-zone{
+  border:2px dashed var(--border-dark);
+  border-radius:var(--r-lg);padding:28px 20px;
+  text-align:center;cursor:pointer;transition:all .18s;
+  background:var(--surface-soft);
+}
+.upload-zone:hover,.upload-zone.drag{
+  border-color:var(--primary);background:var(--primary-light);
+}
+.upload-icon{font-size:22px;margin-bottom:8px;display:block}
+.upload-label{font-size:13px;color:var(--text-soft);margin-bottom:3px;font-weight:500}
+.upload-hint{font-size:12px;color:var(--text-muted)}
+
+/* レビュースロット */
+.rev-slots{display:flex;gap:10px;margin-bottom:12px}
+.rev-slot{
+  flex:1;border:1px solid var(--border);
+  border-radius:var(--r-lg);padding:14px 10px;
+  text-align:center;cursor:pointer;
+  transition:all .18s;background:var(--surface);
+}
+.rev-slot:hover{border-color:var(--primary);background:var(--primary-light)}
+.rev-slot.loaded{border:2px solid var(--green);background:var(--green-light)}
+.rev-slot-icon{font-size:20px;margin-bottom:5px;display:block}
+.rev-slot-lbl{font-size:12px;color:var(--text-soft);margin-bottom:3px;font-weight:500}
+.rev-slot-cnt{font-size:11px;font-family:var(--mono);color:var(--green);display:none;margin-bottom:2px;font-weight:600}
+.rev-slot.loaded .rev-slot-cnt{display:block}
+.rev-slot-hint{font-size:11px;color:var(--text-muted)}
+
+/* ===========================
+   REVIEW TABLE
+=========================== */
+.rev-table{width:100%;border-collapse:collapse;font-size:13px}
+.rev-table th{
+  text-align:left;padding:10px 14px;
+  font-family:var(--mono);font-size:11px;
+  color:var(--text-soft);text-transform:uppercase;
+  letter-spacing:.06em;border-bottom:2px solid var(--border);
+  font-weight:600;background:var(--surface-soft);
+}
+.rev-table td{padding:11px 14px;border-bottom:1px solid var(--border);vertical-align:top;line-height:1.65}
+.rev-table tr:last-child td{border-bottom:none}
+.rev-table tr:hover td{background:var(--surface-soft)}
+.stars{font-size:12px;white-space:nowrap}
+.s-high{color:#e65100}
+.s-low{color:var(--blue)}
+.rev-text{max-width:400px;color:var(--text-soft)}
+.tag{display:inline-block;padding:3px 9px;border-radius:4px;font-size:11px;font-family:var(--mono);font-weight:600}
+.tag-pain{background:var(--red-light);color:var(--red)}
+.tag-good{background:var(--green-light);color:var(--green)}
+.tag-neutral{background:var(--surface-soft);color:var(--text-muted)}
+
+/* ===========================
+   SUMMARY CARDS
+=========================== */
+.sum-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
+@media(max-width:900px){.sum-grid{grid-template-columns:repeat(2,1fr)}}
+.sum-card{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--r-lg);padding:16px 18px;
+  box-shadow:var(--sh-xs);
+}
+.sum-num{font-family:var(--mono);font-size:26px;font-weight:700;margin-bottom:3px}
+.sum-label{font-size:11px;color:var(--text-muted);font-weight:500;text-transform:uppercase;letter-spacing:.06em}
+.num-red{color:var(--red)}
+.num-green{color:var(--green)}
+.num-yellow{color:var(--primary)}
+
+/* ===========================
+   INSIGHTS
+=========================== */
+.insight{
+  background:var(--surface-soft);
+  border-left:4px solid var(--primary);
+  border-radius:0 var(--r) var(--r) 0;
+  padding:14px 18px;margin-bottom:12px;
+}
+.insight.pain{border-left-color:var(--red)}
+.insight-title{
+  font-family:var(--mono);font-size:11px;color:var(--primary-dark);
+  text-transform:uppercase;letter-spacing:.1em;
+  margin-bottom:10px;font-weight:600;
+}
+.insight.pain .insight-title{color:var(--red)}
+.kw-list{display:flex;flex-wrap:wrap;gap:6px}
+.kw-tag{padding:4px 10px;border-radius:4px;font-size:12px;font-family:var(--mono)}
+.kw-good{background:var(--green-light);color:var(--green);border:1px solid rgba(46,125,50,.2)}
+.kw-pain{background:var(--red-light);color:var(--red);border:1px solid rgba(198,40,40,.2)}
+
+/* ===========================
+   KW TABLE
+=========================== */
+.kw-table{width:100%;border-collapse:collapse;font-size:13px}
+.kw-table th{
+  text-align:left;padding:9px 12px;
+  font-family:var(--mono);font-size:11px;
+  color:var(--text-soft);text-transform:uppercase;
+  border-bottom:2px solid var(--border);
+  font-weight:600;background:var(--surface-soft);white-space:nowrap;
+}
+.kw-table td{padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:middle}
+.kw-table tr:last-child td{border-bottom:none}
+.kw-table tr:hover td{background:var(--surface-soft)}
+.kw-name{font-weight:600;color:var(--text)}
+.kw-num{font-family:var(--mono);font-size:12px;color:var(--text-soft)}
+.kw-bar-wrap{background:var(--surface-soft);border-radius:3px;height:5px;width:80px;overflow:hidden}
+.kw-bar{height:100%;background:var(--primary);border-radius:3px;transition:width .3s}
+.badge-type{padding:3px 8px;border-radius:4px;font-size:11px;font-family:var(--mono);font-weight:600}
+.badge-main{background:var(--primary-light);color:var(--primary-dark)}
+.badge-long{background:var(--blue-light);color:var(--blue)}
+.badge-other{background:var(--surface-soft);color:var(--text-muted)}
+
+/* ===========================
+   IMG GRID
+=========================== */
+.img-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:12px}
+.img-card{
+  background:var(--surface-soft);border:1px solid var(--border);
+  border-radius:var(--r);overflow:hidden;position:relative;
+  aspect-ratio:1;display:flex;align-items:center;justify-content:center;
+  cursor:pointer;transition:all .15s;
+}
+.img-card:hover{border-color:var(--primary);box-shadow:var(--sh-sm)}
+.img-card img{width:100%;height:100%;object-fit:contain;padding:8px}
+.img-overlay{
+  position:absolute;inset:0;
+  background:rgba(0,0,0,.5);
+  display:flex;align-items:center;justify-content:center;
+  opacity:0;transition:opacity .15s;gap:6px;
+}
+.img-card:hover .img-overlay{opacity:1}
+.img-label{font-size:11px;color:var(--text-muted);text-align:center;padding:5px;font-family:var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* ===========================
+   ASIN HEADER
+=========================== */
+.asin-header{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--r-xl);padding:18px 22px;margin-bottom:18px;
+  display:flex;align-items:flex-start;gap:18px;
+  box-shadow:var(--sh-sm);
+  border-top:3px solid var(--primary);
+}
+.asin-thumb{
+  width:80px;height:80px;
+  background:var(--surface-soft);border:1px solid var(--border);
+  border-radius:var(--r);flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+  font-size:28px;overflow:hidden;
+}
+.asin-thumb img{width:100%;height:100%;object-fit:contain;padding:6px}
+.asin-meta{flex:1;min-width:0}
+.asin-title-text{
+  font-size:15px;font-weight:600;margin-bottom:4px;
+  line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  color:var(--text);
+}
+.asin-code{font-family:var(--mono);font-size:12px;color:var(--text-muted);margin-bottom:8px}
+.asin-tags{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+.asin-tag{
+  padding:3px 9px;border-radius:5px;font-size:11px;
+  font-family:var(--mono);font-weight:500;
+  background:var(--surface-soft);color:var(--text-muted);
+  border:1px solid var(--border);
+}
+.asin-tag-link{
+  text-decoration:none;
+  color:var(--primary-dark)!important;
+  background:var(--primary-light)!important;
+  border-color:var(--primary)!important;
+}
+.asin-sync{font-size:11px;font-family:var(--mono);color:var(--text-muted);margin-top:7px;display:flex;align-items:center;gap:5px}
+.asin-sync.ok{color:var(--green)}
+.asin-sync.warn{color:var(--red)}
+
+/* ===========================
+   FILTER
+=========================== */
+.filter-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+.f-btn{
+  padding:5px 13px;border-radius:var(--r);
+  border:1px solid var(--border);
+  background:var(--surface);color:var(--text-muted);
+  font-size:12px;font-family:var(--mono);font-weight:500;
+  cursor:pointer;transition:all .12s;
+}
+.f-btn:hover{color:var(--text);border-color:var(--border-dark);background:var(--surface-soft)}
+.f-btn.active{
+  background:var(--primary-light);
+  color:var(--primary-dark);
+  border-color:var(--primary);font-weight:600;
+}
+
+/* ===========================
+   MODAL
+=========================== */
+.modal-bg{
+  position:fixed;inset:0;
+  background:rgba(0,0,0,.35);
+  display:flex;align-items:center;justify-content:center;
+  z-index:100;opacity:0;pointer-events:none;
+  transition:opacity .2s;
+}
+.modal-bg.open{opacity:1;pointer-events:all}
+.modal{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--r-xl);
+  padding:28px;width:420px;
+  box-shadow:var(--sh-md);
+  border-top:4px solid var(--primary);
+}
+.modal-title{font-size:17px;font-weight:600;margin-bottom:4px;color:var(--text)}
+.modal-sub{font-size:13px;color:var(--text-muted);margin-bottom:20px;line-height:1.5}
+.modal-label{font-size:12px;color:var(--text-soft);margin-bottom:6px;font-family:var(--mono);font-weight:600}
+.modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:22px}
+.color-pick{display:flex;gap:10px;margin-bottom:6px}
+.c-dot{width:22px;height:22px;border-radius:50%;cursor:pointer;border:3px solid transparent;transition:all .12s}
+.c-dot.sel{border-color:var(--text);transform:scale(1.15)}
+.modal.danger .modal-title{color:var(--red)}
+.modal.danger{border-top-color:var(--red)}
+.danger-box{
+  background:var(--red-light);border:1px solid rgba(198,40,40,.25);
+  border-radius:var(--r);padding:13px 16px;margin-bottom:16px;
+  font-size:13px;line-height:1.65;color:var(--red);font-weight:500;
+}
+
+/* ===========================
+   TOAST
+=========================== */
+.toast{
+  position:fixed;bottom:22px;right:22px;
+  background:var(--text);color:var(--surface);
+  border-radius:var(--r);padding:10px 18px;
+  font-size:13px;z-index:200;
+  transform:translateY(10px);opacity:0;
+  transition:all .2s;
+  display:flex;align-items:center;gap:8px;
+  max-width:340px;box-shadow:var(--sh-md);font-weight:500;
+}
+.toast.show{transform:translateY(0);opacity:1}
+.toast.ok{background:var(--green)}
+.toast.err{background:var(--red)}
+.toast.warn{background:#e65100}
+
+/* ===========================
+   EMPTY
+=========================== */
+.empty{text-align:center;padding:52px 28px;color:var(--text-muted)}
+.empty-icon{font-size:36px;margin-bottom:12px;opacity:.25;display:block}
+.empty-text{font-size:14px;margin-bottom:18px;line-height:1.8;color:var(--text-muted)}
+
+/* ===========================
+   FILE LIST
+=========================== */
+.file-item{
+  display:flex;align-items:center;gap:12px;
+  padding:10px 14px;
+  background:var(--surface-soft);border:1px solid var(--border);
+  border-radius:var(--r);font-size:13px;
+  margin-bottom:6px;transition:all .15s;
+}
+.file-item:hover{background:var(--primary-light);border-color:var(--primary);box-shadow:var(--sh-xs)}
+.file-name{flex:1;font-family:var(--mono);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text-soft);font-weight:500}
+.file-meta{font-size:11px;color:var(--text-muted);flex-shrink:0}
+
+/* ===========================
+   DASHBOARD CARDS
+=========================== */
+.dash-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px;margin-bottom:24px}
+.dash-card{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--r-lg);padding:18px;text-align:center;
+  box-shadow:var(--sh-xs);transition:all .18s;
+  border-top:3px solid var(--primary);
+}
+.dash-card:hover{box-shadow:var(--sh-hover);transform:translateY(-2px)}
+.dash-num{
+  font-family:var(--mono);font-size:28px;font-weight:700;
+  color:var(--primary);margin-bottom:5px;
+}
+.dash-label{font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.07em;font-weight:600}
+
+.asin-list-card{
+  display:flex;align-items:center;gap:12px;
+  padding:13px 16px;
+  background:var(--surface);border:1px solid var(--border);
+  border-left:4px solid transparent;
+  border-radius:var(--r-lg);margin-bottom:10px;
+  cursor:pointer;transition:all .18s;box-shadow:var(--sh-xs);
+}
+.asin-list-card:hover{
+  border-left-color:var(--primary);
+  box-shadow:var(--sh-hover);transform:translateY(-2px);
+  background:var(--primary-light);
+}
+.alc-thumb{
+  width:42px;height:42px;
+  background:var(--surface-soft);border:1px solid var(--border);
+  border-radius:var(--r);display:flex;align-items:center;
+  justify-content:center;font-size:20px;flex-shrink:0;overflow:hidden;
+}
+.alc-thumb img{width:100%;height:100%;object-fit:contain;padding:4px}
+.alc-code{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text)}
+.alc-note{font-size:12px;color:var(--text-muted);flex:1}
+.alc-tags{display:flex;gap:5px}
+
+/* ===========================
+   MISC
+=========================== */
+.field-row{margin-bottom:14px}
+.field-label{font-size:12px;color:var(--text-soft);margin-bottom:5px;font-family:var(--mono);font-weight:600}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border-dark);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:var(--text-muted)}
+@keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+.fadein{animation:fadeIn .2s ease}
+.hidden{display:none!important}
+.row{display:flex;gap:10px;align-items:flex-start}
+.sep{height:1px;background:var(--border);margin:18px 0}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- SIDEBAR -->
+<aside class="sidebar">
+  <div class="sidebar-top">
+    <div class="logo">RESEARCH HUB</div>
+    <div class="logo-sub">Amazon JP 競合分析</div>
+  </div>
+  <div class="sb-actions">
+    <button class="sb-btn" id="btnNewProj" onclick="openNewProj()">
+      <span class="btn-spinner"></span><span class="btn-label">＋ 新規プロジェクト</span>
+    </button>
+    <button class="sb-btn sb-btn-solid" id="btnSync" onclick="syncWithDrive()">
+      <span class="btn-spinner"></span><span class="btn-label">☁ Driveと同期</span>
+    </button>
+  </div>
+  <div class="sb-section">
+    <div class="sb-label">プロジェクト</div>
+    <div class="proj-list" id="projList"></div>
+  </div>
+  <div class="sb-status">
+    <div class="sb-status-row">
+      <div class="status-dot" id="statusDot"></div>
+      <span id="statusText">未接続</span>
+    </div>
+    <div id="lastSyncText" style="margin-top:3px;font-size:9px;color:var(--muted2)"></div>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<main class="main">
+
+  <!-- NO SELECTION -->
+  <div id="noSel" style="display:flex;align-items:center;justify-content:center;flex:1;min-height:100vh">
+    <div class="empty">
+      <div class="empty-icon">🗂</div>
+      <div class="empty-text">プロジェクトを作成して<br>競合ASINを追加してください</div>
+      <button class="btn btn-primary" onclick="openNewProj()">＋ 新規プロジェクト</button>
+    </div>
+  </div>
+
+  <!-- PROJECT HOME -->
+  <div id="projHome" class="hidden">
+    <div class="topbar">
+      <div class="breadcrumb"><span id="ph-projName"></span></div>
+      <a id="ph-drive-link" href="#" target="_blank" class="btn btn-sm" style="display:none">☁ Drive ↗</a>
+      <button class="btn btn-sm btn-primary" onclick="openNewAsin()">＋ 競合ASIN追加</button>
+    </div>
+    <div class="tabs">
+      <div class="tab active" onclick="switchProjTab('asins',this)">競合ASIN一覧</div>
+      <div class="tab" onclick="switchProjTab('projfiles',this)">プロジェクトファイル</div>
+    </div>
+    <div class="content">
+      <div id="ptab-asins" class="fadein">
+        <div id="projDashboard"></div>
+      </div>
+      <div id="ptab-projfiles" class="hidden fadein">
+        <div class="panel">
+          <div class="panel-header"><div class="panel-num">01</div><div class="panel-title">プロジェクト共通ファイル</div></div>
+          <div class="panel-body">
+            <div class="upload-zone" id="pfDropZone"
+              onclick="document.getElementById('pfFileInput').click()"
+              ondragover="event.preventDefault();this.classList.add('drag')"
+              ondragleave="this.classList.remove('drag')"
+              ondrop="handlePfDrop(event)">
+              <div class="upload-icon">📂</div>
+              <div class="upload-label">ファイルをドラッグ＆ドロップ</div>
+              <div class="upload-hint">txt / md / csv　クリックでも選択可</div>
+            </div>
+            <input type="file" id="pfFileInput" accept=".txt,.md,.csv" multiple style="display:none" onchange="handlePfFiles(event)">
+            <div class="sep"></div>
+            <div class="field-label">テキストで直接入力する場合</div>
+            <div class="row" style="margin-bottom:8px;margin-top:6px">
+              <input class="input" id="pfName" placeholder="ファイル名">
+              <select class="input" id="pfType" style="max-width:80px"><option value="md">.md</option><option value="txt">.txt</option><option value="csv">.csv</option></select>
+            </div>
+            <textarea class="input" id="pfContent" rows="6" placeholder="メモ・原稿・企画書などを貼り付け"></textarea>
+            <div style="display:flex;justify-content:flex-end;margin-top:10px">
+              <button class="btn btn-primary" id="btnSaveProjFile" onclick="saveProjFile()">
+                <span class="btn-spinner"></span><span class="btn-label">保存 ＋ Drive</span>
+              </button>
+            </div>
+          </div>
+        </div>
+        <div id="projFileList"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ASIN DETAIL VIEW -->
+  <div id="asinView" class="hidden">
+    <div class="topbar">
+      <div class="breadcrumb" id="bc"></div>
+      <button class="btn btn-sm" onclick="exportReviews()">↓ レビューCSV</button>
+      <button class="btn btn-sm btn-danger" onclick="openDeleteAsinModal()">削除</button>
+    </div>
+    <div class="tabs" id="asinTabs">
+      <div class="tab active" onclick="switchTab('info',this)">商品情報</div>
+      <div class="tab" onclick="switchTab('reviews',this)">レビュー分析 <span class="tab-count" id="tc-reviews">0</span></div>
+      <div class="tab" onclick="switchTab('keywords',this)">逆引きKW <span class="tab-count" id="tc-keywords">0</span></div>
+      <div class="tab" onclick="switchTab('files',this)">ファイル <span class="tab-count" id="tc-files">0</span></div>
+    </div>
+    <div class="content">
+
+      <!-- INFO TAB -->
+      <div id="tab-info" class="fadein">
+        <div class="asin-header" id="asinHeader"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+          <div class="panel">
+            <div class="panel-header">
+              <div class="panel-num">01</div><div class="panel-title">タイトル・箇条書き</div>
+              <button class="btn btn-sm" id="btnSaveInfo" onclick="saveInfoField()">
+                <span class="btn-spinner"></span><span class="btn-label">保存</span>
+              </button>
+            </div>
+            <div class="panel-body">
+              <div class="field-row">
+                <div class="field-label">タイトル</div>
+                <input class="input" id="f-title" placeholder="商品タイトルを貼り付け">
+              </div>
+              <div class="field-row">
+                <div class="field-label">箇条書き（bullet points）</div>
+                <textarea class="input" id="f-bullets" rows="7" placeholder="・箇条書き1&#10;・箇条書き2&#10;・箇条書き3"></textarea>
+              </div>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-header">
+              <div class="panel-num">02</div><div class="panel-title">商品説明文</div>
+              <button class="btn btn-sm" id="btnSaveInfo2" onclick="saveInfoField()">
+                <span class="btn-spinner"></span><span class="btn-label">保存</span>
+              </button>
+            </div>
+            <div class="panel-body">
+              <textarea class="input" id="f-desc" rows="11" placeholder="商品説明文を貼り付け"></textarea>
+            </div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-num">03</div><div class="panel-title">商品画像・A+コンテンツ</div>
+            <button class="btn btn-sm" onclick="openImageAdd()">＋ 画像追加</button>
+          </div>
+          <div class="panel-body">
+            <div id="imgGrid" class="img-grid"></div>
+            <div id="imgEmpty" class="empty" style="padding:24px 0">
+              <div class="empty-icon" style="font-size:24px">🖼</div>
+              <div class="empty-text" style="font-size:12px">画像を追加してください</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- REVIEWS TAB -->
+      <div id="tab-reviews" class="hidden fadein">
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-num">01</div><div class="panel-title">レビューExcel アップロード</div>
+            <div style="font-size:10px;color:var(--muted);font-family:var(--mono);margin-left:auto">重複自動除去</div>
+          </div>
+          <div class="panel-body">
+            <div class="rev-slots">
+              <div class="rev-slot" id="slot-rec" onclick="triggerUpload('rec')" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="handleDrop(event,'rec')">
+                <div class="rev-slot-icon">⭐</div>
+                <div class="rev-slot-lbl">おすすめ順</div>
+                <div class="rev-slot-cnt" id="sc-rec"></div>
+                <div class="rev-slot-hint">Excel / CSV</div>
+              </div>
+              <div class="rev-slot" id="slot-pos" onclick="triggerUpload('pos')" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="handleDrop(event,'pos')">
+                <div class="rev-slot-icon">👍</div>
+                <div class="rev-slot-lbl">肯定的レビュー</div>
+                <div class="rev-slot-cnt" id="sc-pos"></div>
+                <div class="rev-slot-hint">Excel / CSV</div>
+              </div>
+              <div class="rev-slot" id="slot-neg" onclick="triggerUpload('neg')" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="handleDrop(event,'neg')">
+                <div class="rev-slot-icon">👎</div>
+                <div class="rev-slot-lbl">否定的レビュー</div>
+                <div class="rev-slot-cnt" id="sc-neg"></div>
+                <div class="rev-slot-hint">Excel / CSV</div>
+              </div>
+            </div>
+            <input type="file" id="fileInput-rec" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleFileInput(event,'rec')">
+            <input type="file" id="fileInput-pos" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleFileInput(event,'pos')">
+            <input type="file" id="fileInput-neg" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleFileInput(event,'neg')">
+            <div id="uploadStatus" style="font-size:11px;color:var(--muted);font-family:var(--mono);margin-top:6px"></div>
+          </div>
+        </div>
+        <div id="revResults" class="hidden fadein">
+          <div class="sum-grid" id="sumGrid"></div>
+          <div class="panel">
+            <div class="panel-header"><div class="panel-num">02</div><div class="panel-title">自動分析</div></div>
+            <div class="panel-body" id="insightBody"></div>
+          </div>
+          <div class="panel">
+            <div class="panel-header">
+              <div class="panel-num">03</div><div class="panel-title">レビュー一覧</div>
+              <div class="filter-row" style="margin:0;margin-left:auto">
+                <button class="f-btn active" onclick="filterRev('all',this)">全て</button>
+                <button class="f-btn" onclick="filterRev('pain',this)">否定</button>
+                <button class="f-btn" onclick="filterRev('good',this)">肯定</button>
+              </div>
+            </div>
+            <div style="overflow-x:auto">
+              <table class="rev-table">
+                <thead><tr><th style="width:55px">評価</th><th>レビュー</th><th style="width:65px">分類</th><th style="width:75px">日付</th></tr></thead>
+                <tbody id="revBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <div id="revEmpty" class="empty" style="padding:40px 0">
+          <div class="empty-icon">💬</div>
+          <div class="empty-text">3種類のExcelをアップロードしてください<br><span style="font-size:11px">重複は自動で除去します</span></div>
+        </div>
+      </div>
+
+      <!-- KEYWORDS TAB -->
+      <div id="tab-keywords" class="hidden fadein">
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-num">01</div><div class="panel-title">逆引きリサーチ Excel</div>
+            <div style="font-size:10px;color:var(--muted);font-family:var(--mono);margin-left:auto">セラースプライト形式</div>
+          </div>
+          <div class="panel-body">
+            <div class="upload-zone" onclick="triggerUpload('kw')" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="handleDrop(event,'kw')">
+              <div class="upload-icon">🔑</div>
+              <div class="upload-label">逆引きリサーチ Excelをアップロード</div>
+              <div class="upload-hint">ReverseASIN-JP-XXXXX.xlsx</div>
+            </div>
+            <input type="file" id="fileInput-kw" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleFileInput(event,'kw')">
+          </div>
+        </div>
+        <div id="kwResults" class="hidden fadein">
+          <div class="panel">
+            <div class="panel-header">
+              <div class="panel-num">02</div><div class="panel-title">キーワード一覧</div>
+              <div class="filter-row" style="margin:0;margin-left:auto">
+                <button class="f-btn active" onclick="filterKw('all',this)">全て</button>
+                <button class="f-btn" onclick="filterKw('主要トラフィックワード',this)">主要</button>
+                <button class="f-btn" onclick="filterKw('ロングテールワード',this)">ロング</button>
+              </div>
+              <button class="btn btn-sm" style="margin-left:8px" onclick="exportKw()">↓ CSV</button>
+            </div>
+            <div style="overflow-x:auto">
+              <table class="kw-table">
+                <thead><tr><th>キーワード</th><th>月間検索数</th><th>トラフィック比率</th><th>自然順位</th><th>ABA週順位</th><th>タイプ</th></tr></thead>
+                <tbody id="kwBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <div id="kwEmpty" class="empty" style="padding:40px 0">
+          <div class="empty-icon">🔑</div>
+          <div class="empty-text">逆引きリサーチのExcelをアップロードしてください</div>
+        </div>
+      </div>
+
+      <!-- FILES TAB -->
+      <div id="tab-files" class="hidden fadein">
+        <div class="panel">
+          <div class="panel-header"><div class="panel-num">01</div><div class="panel-title">ファイル保存</div></div>
+          <div class="panel-body">
+            <div class="upload-zone" id="afDropZone"
+              onclick="document.getElementById('afFileInput').click()"
+              ondragover="event.preventDefault();this.classList.add('drag')"
+              ondragleave="this.classList.remove('drag')"
+              ondrop="handleAfDrop(event)">
+              <div class="upload-icon">📂</div>
+              <div class="upload-label">ファイルをドラッグ＆ドロップ</div>
+              <div class="upload-hint">txt / md / csv　クリックでも選択可</div>
+            </div>
+            <input type="file" id="afFileInput" accept=".txt,.md,.csv" multiple style="display:none" onchange="handleAfFiles(event)">
+            <div class="sep"></div>
+            <div class="field-label">テキストで直接入力する場合</div>
+            <div class="row" style="margin-bottom:8px;margin-top:6px">
+              <input class="input" id="fName" placeholder="ファイル名" style="max-width:220px">
+              <select class="input" id="fType" style="max-width:80px"><option value="txt">.txt</option><option value="md">.md</option><option value="csv">.csv</option></select>
+            </div>
+            <textarea class="input" id="fContent" rows="6" placeholder="Claudeに生成させた原稿・メモなど"></textarea>
+            <div style="display:flex;justify-content:flex-end;margin-top:10px">
+              <button class="btn btn-primary" id="btnSaveFile" onclick="saveFile()">
+                <span class="btn-spinner"></span><span class="btn-label">保存 ＋ Drive</span>
+              </button>
+            </div>
+          </div>
+        </div>
+        <div id="fileList"></div>
+      </div>
+
+    </div>
+  </div>
+</main>
+</div>
+
+<!-- NEW PROJECT MODAL -->
+<div class="modal-bg" id="newProjModal">
+  <div class="modal">
+    <div class="modal-title">新規プロジェクト</div>
+    <div class="modal-sub">商品カテゴリや競合グループ名を入力してください</div>
+    <div class="modal-label">プロジェクト名 <span style="color:var(--error)">*</span></div>
+    <input class="input" id="newProjName" placeholder="例：シリコントング" style="margin-bottom:4px">
+    <div class="field-error" id="err-projName">プロジェクト名を入力してください</div>
+    <div style="margin-top:12px" class="modal-label">カラー</div>
+    <div class="color-pick">
+      <div class="c-dot sel" style="background:#2d5a3d" data-c="#2d5a3d" onclick="selColor(this)"></div>
+      <div class="c-dot" style="background:#8b3a1e" data-c="#8b3a1e" onclick="selColor(this)"></div>
+      <div class="c-dot" style="background:#1e4a8b" data-c="#1e4a8b" onclick="selColor(this)"></div>
+      <div class="c-dot" style="background:#6b3a8b" data-c="#6b3a8b" onclick="selColor(this)"></div>
+      <div class="c-dot" style="background:#8b6f1e" data-c="#8b6f1e" onclick="selColor(this)"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('newProjModal')">キャンセル</button>
+      <button class="btn btn-primary" id="btnCreateProj" onclick="createProj()">
+        <span class="btn-spinner"></span><span class="btn-label">作成</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- NEW ASIN MODAL -->
+<div class="modal-bg" id="newAsinModal">
+  <div class="modal">
+    <div class="modal-title">競合ASIN追加</div>
+    <div class="modal-sub">Amazon商品のASINコードを入力してください</div>
+    <div class="modal-label">ASIN <span style="color:var(--error)">*</span></div>
+    <input class="input" id="newAsinCode" placeholder="例：B0BZBKS46P" style="margin-bottom:4px;font-family:var(--mono)">
+    <div class="field-error" id="err-asinCode">有効なASINを入力してください（例：B0BZBKS46P）</div>
+    <div style="margin-top:10px" class="modal-label">メモ（競合の名称など）</div>
+    <input class="input" id="newAsinNote" placeholder="例：〇〇社シリコントング" style="margin-bottom:10px">
+    <div class="modal-label">サムネイルURL（任意）</div>
+    <input class="input" id="newAsinThumb" placeholder="https://m.media-amazon.com/images/I/...">
+    <div class="modal-actions" style="margin-top:16px">
+      <button class="btn" onclick="closeModal('newAsinModal')">キャンセル</button>
+      <button class="btn btn-primary" id="btnCreateAsin" onclick="createAsin()">
+        <span class="btn-spinner"></span><span class="btn-label">追加</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- IMAGE ADD MODAL -->
+<div class="modal-bg" id="imgModal">
+  <div class="modal">
+    <div class="modal-title">画像追加</div>
+    <div class="modal-sub">複数ファイルを一括でアップロードできます</div>
+    <div class="modal-label">ラベル（任意）</div>
+    <input class="input" id="imgLabel" placeholder="例：メイン画像・A+①　※空欄でもOK" style="margin-bottom:12px">
+    <div class="modal-label">画像ファイル（複数選択OK）</div>
+    <div class="upload-zone" id="imgUploadZone" style="margin-top:6px"
+      onclick="document.getElementById('imgFileInput').click()"
+      ondragover="event.preventDefault();this.classList.add('drag')"
+      ondragleave="this.classList.remove('drag')"
+      ondrop="event.preventDefault();this.classList.remove('drag');handleImageFiles({target:{files:event.dataTransfer.files}})">
+      <div class="upload-icon">🖼</div>
+      <div class="upload-label">ドラッグ＆ドロップ / クリックして選択</div>
+      <div class="upload-hint">jpg / png / gif / webp　複数選択OK</div>
+    </div>
+    <input type="file" id="imgFileInput" accept="image/*" multiple style="display:none" onchange="handleImageFiles(event)">
+    <div id="imgUploadStatus" style="font-size:11px;color:var(--muted);margin-top:8px;font-family:var(--mono)"></div>
+    <div class="modal-actions" style="margin-top:14px">
+      <button class="btn" onclick="closeModal('imgModal')">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<!-- DELETE ASIN MODAL -->
+<div class="modal-bg" id="deleteAsinModal">
+  <div class="modal danger">
+    <div class="modal-title">ASIN削除の確認</div>
+    <div class="danger-box" id="deleteAsinInfo"></div>
+    <p style="font-size:12px;color:var(--muted);line-height:1.7;margin-bottom:8px">このASINと関連するDriveフォルダ・すべてのファイルを削除します。<br><strong style="color:var(--error)">この操作は元に戻せません。</strong></p>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('deleteAsinModal')">キャンセル</button>
+      <button class="btn btn-danger" id="btnConfirmDelete" onclick="confirmDeleteAsin()">
+        <span class="btn-spinner"></span><span class="btn-label">削除する</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbxR5EQPKvT8a0ujWHZXSIj6aWRkB76rbqaZH4dMAkSM4JbRU0FpezjE4v6d7z0cg-7V/exec';
+
+// ===== STATE =====
+let S = { projects:[], curProjIdx:-1, curAsinIdx:-1, selColor:'#2d5a3d', curTab:'info', revFilter:'all', kwFilter:'all', lastSync:null };
+try{ const d=localStorage.getItem('rh2');if(d){const p=JSON.parse(d);S.projects=p.projects||[];S.lastSync=p.lastSync||null;}}catch(e){}
+
+function save(){
+  try{localStorage.setItem('rh2',JSON.stringify({projects:S.projects,lastSync:S.lastSync}));}catch(e){}
+}
+
+// ===== BUTTON STATE HELPERS =====
+function setLoading(id, on){
+  const el=document.getElementById(id); if(!el)return;
+  el.disabled=on; el.classList.toggle('loading',on);
+}
+function flashBtn(id, type){
+  const el=document.getElementById(id); if(!el)return;
+  el.classList.add(type==='ok'?'btn-ok':'btn-err');
+  setTimeout(()=>el.classList.remove('btn-ok','btn-err'),1500);
+}
+
+// ===== STATUS BAR =====
+function setStatus(type, text){
+  const dot=document.getElementById('statusDot'), txt=document.getElementById('statusText');
+  if(!dot)return;
+  dot.className='status-dot'+(type?' '+type:'');
+  if(txt)txt.textContent=text||'';
+  if(type==='ok' && S.lastSync){
+    const el=document.getElementById('lastSyncText');
+    if(el)el.textContent='最終同期: '+new Date(S.lastSync).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
+  }
+}
+
+// ===== DRIVE SYNC =====
+async function syncToDrive(projName, asinCode, payload){
+  try{
+    setStatus('sync','同期中...');
+    const res=await fetch(GAS_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'save',project:projName,asin:asinCode,payload})});
+    const json=await res.json();
+    if(json.status==='saved'){S.lastSync=Date.now();save();setStatus('ok','保存済み');return json;}
+    else{setStatus('err','保存エラー');toast('⚠ Drive保存エラー: '+(json.error||'不明'),'err');}
+  }catch(e){setStatus('err','接続エラー');toast('⚠ Drive接続エラー','err');}
+}
+
+async function syncFromDrive(projName, asinCode){
+  try{
+    const url=GAS_URL+'?action=load&project='+encodeURIComponent(projName)+'&asin='+encodeURIComponent(asinCode);
+    const res=await fetch(url); const json=await res.json();
+    if(json.status==='ok'&&json.data)return json.data;
+  }catch(e){toast('⚠ Drive読込エラー','err');}
+  return null;
+}
+
+async function saveFileToDrive(projName, asinCode, filename, content){
+  try{
+    const res=await fetch(GAS_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'saveFile',project:projName,asin:asinCode,filename,content})});
+    return await res.json();
+  }catch(e){return null;}
+}
+
+async function loadFromDriveIfNewer(pi, ai){
+  const proj=S.projects[pi]; const asin=proj.asins[ai];
+  setStatus('sync','読込中...');
+  const data=await syncFromDrive(proj.name,asin.code);
+  if(data){
+    if(data.reviews?.length)asin.reviews=data.reviews;
+    if(data.keywords?.length)asin.keywords=data.keywords;
+    if(data.files?.length)asin.files=data.files;
+    if(data.title)asin.title=data.title;
+    if(data.bullets)asin.bullets=data.bullets;
+    if(data.description)asin.description=data.description;
+    if(data.images?.length)asin.images=data.images;
+    if(data.note)asin.note=data.note;
+    if(data.thumb)asin.thumb=data.thumb;
+    save(); setStatus('ok','読込完了');
+  }else{setStatus('ok','ローカル使用');}
+}
+
+async function saveAndSync(){
+  save();
+  const a=getAsin(); const proj=S.projects[S.curProjIdx];
+  if(a&&proj){
+    await syncToDrive(proj.name,a.code,{
+      note:a.note||'',thumb:a.thumb||'',
+      title:a.title,bullets:a.bullets,description:a.description,
+      images:a.images,reviews:a.reviews,keywords:a.keywords,files:a.files
+    });
+  }
+}
+
+// ===== SIDEBAR =====
+function renderSidebar(){
+  const el=document.getElementById('projList');
+  if(!S.projects.length){el.innerHTML='<div style="font-size:11px;color:var(--muted2);padding:4px 0">プロジェクトなし</div>';return;}
+  el.innerHTML=S.projects.map((p,pi)=>{
+    const open=S.curProjIdx===pi;
+    const cnt=(p.asins||[]).length;
+    const asins=(p.asins||[]).map((a,ai)=>`
+      <div class="asin-item ${S.curProjIdx===pi&&S.curAsinIdx===ai?'active':''}" onclick="selectAsin(${pi},${ai})">
+        <span style="font-size:9px;flex-shrink:0">▸</span>
+        <span style="overflow:hidden;text-overflow:ellipsis">${a.code}</span>
+        ${a.note?`<span class="asin-badge">${a.note.slice(0,8)}</span>`:''}
+      </div>`).join('');
+    return `
+      <div class="proj-item">
+        <div class="proj-header ${S.curProjIdx===pi?'active':''}" onclick="selectProj(${pi})">
+          <div class="proj-dot" style="background:${p.color}"></div>
+          <div class="proj-name" title="${p.name}">${p.name}</div>
+          <span class="proj-count">${cnt}</span>
+          <div class="proj-actions">
+            <button class="proj-act-btn" onclick="event.stopPropagation();openEditProj(${pi})" title="編集">✏</button>
+            <button class="proj-act-btn" onclick="event.stopPropagation();deleteProjConfirm(${pi})" title="削除" style="color:var(--error)">🗑</button>
+          </div>
+          <span class="proj-chevron ${open?'open':''}">▶</span>
+        </div>
+        ${open?`<div class="asin-list">${asins}<button class="new-asin-btn" onclick="openNewAsin()">＋ ASIN追加</button></div>`:''}
+      </div>`;
+  }).join('');
+}
+
+// ===== PROJECT =====
+function openNewProj(){
+  document.getElementById('newProjModal').classList.add('open');
+  document.getElementById('newProjName').value='';
+  document.getElementById('err-projName').classList.remove('show');
+  document.getElementById('newProjName').classList.remove('is-error');
+  // reset btn label
+  const btn=document.getElementById('btnCreateProj');
+  btn.querySelector('.btn-label').textContent='作成';
+  btn.onclick=createProj;
+  setTimeout(()=>document.getElementById('newProjName').focus(),100);
+}
+
+async function createProj(){
+  const name=document.getElementById('newProjName').value.trim();
+  if(!name){
+    document.getElementById('err-projName').classList.add('show');
+    document.getElementById('newProjName').classList.add('is-error'); return;
+  }
+  document.getElementById('err-projName').classList.remove('show');
+  document.getElementById('newProjName').classList.remove('is-error');
+  setLoading('btnCreateProj',true);
+  S.projects.push({name,color:S.selColor,asins:[],files:[]});
+  save(); closeModal('newProjModal'); renderSidebar();
+  selectProj(S.projects.length-1);
+  try{
+    await fetch(GAS_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'createFolder',project:name,color:S.selColor})});
+    toast('✓ プロジェクト「'+name+'」を作成','ok');
+  }catch(e){toast('✓ プロジェクトを作成（Drive保存失敗）','warn');}
+  setLoading('btnCreateProj',false);
+}
+
+function selectProj(pi){
+  S.curProjIdx=pi; S.curAsinIdx=-1; renderSidebar();
+  document.getElementById('noSel').style.display='none';
+  document.getElementById('projHome').classList.remove('hidden');
+  document.getElementById('asinView').classList.add('hidden');
+  const proj=S.projects[pi];
+  document.getElementById('ph-projName').textContent=proj.name;
+  const dl=document.getElementById('ph-drive-link');
+  if(dl){dl.style.display=proj.folderUrl?'':'none';dl.href=proj.folderUrl||'#';}
+  switchProjTab('asins',document.querySelector('#projHome .tab'));
+  renderProjDashboard(); renderProjFiles();
+}
+
+function renderProjDashboard(){
+  const proj=S.projects[S.curProjIdx]; if(!proj)return;
+  const asins=proj.asins||[];
+  const el=document.getElementById('projDashboard');
+  if(!asins.length){
+    el.innerHTML=`<div class="empty" style="padding:40px 0">
+      <div class="empty-icon">🔍</div>
+      <div class="empty-text">まだ競合ASINが登録されていません<br>追加ボタンからASINを登録してください</div>
+      <button class="btn btn-primary" onclick="openNewAsin()">＋ 競合ASIN追加</button></div>`;
+    return;
+  }
+  const totalRev=asins.reduce((s,a)=>s+(a.reviews?.length||0),0);
+  const totalKw=asins.reduce((s,a)=>s+(a.keywords?.length||0),0);
+  el.innerHTML=`
+    <div class="dash-grid">
+      <div class="dash-card"><div class="dash-num">${asins.length}</div><div class="dash-label">競合ASIN数</div></div>
+      <div class="dash-card"><div class="dash-num">${totalRev}</div><div class="dash-label">総レビュー数</div></div>
+      <div class="dash-card"><div class="dash-num">${totalKw}</div><div class="dash-label">総KW数</div></div>
+    </div>
+    <div class="sb-label" style="margin-bottom:10px">ASIN一覧</div>
+    ${asins.map((a,ai)=>`
+      <div class="asin-list-card" onclick="selectAsin(${S.curProjIdx},${ai})">
+        <div class="alc-thumb">${a.thumb?`<img src="${a.thumb}" onerror="this.style.display='none'">`:'📦'}</div>
+        <div style="flex:1;min-width:0">
+          <div class="alc-code">${a.code}</div>
+          <div class="alc-note">${a.title||a.note||'—'}</div>
+        </div>
+        <div class="alc-tags">
+          ${a.reviews?.length?`<span class="asin-tag">レビュー ${a.reviews.length}</span>`:''}
+          ${a.keywords?.length?`<span class="asin-tag">KW ${a.keywords.length}</span>`:''}
+        </div>
+        <span style="color:var(--muted2);font-size:12px;margin-left:4px">›</span>
+      </div>`).join('')}`;
+}
+
+function switchProjTab(tab,el){
+  document.querySelectorAll('#projHome .tab').forEach(t=>t.classList.remove('active'));
+  if(el)el.classList.add('active');
+  document.getElementById('ptab-asins').classList.toggle('hidden',tab!=='asins');
+  document.getElementById('ptab-projfiles').classList.toggle('hidden',tab!=='projfiles');
+}
+
+// ===== PROJ EDIT/DELETE =====
+function openEditProj(pi){
+  document.getElementById('newProjModal').classList.add('open');
+  document.getElementById('newProjName').value=S.projects[pi].name;
+  document.getElementById('err-projName').classList.remove('show');
+  const btn=document.getElementById('btnCreateProj');
+  btn.querySelector('.btn-label').textContent='更新';
+  btn.onclick=()=>updateProj(pi);
+  setTimeout(()=>document.getElementById('newProjName').focus(),100);
+}
+async function updateProj(pi){
+  const name=document.getElementById('newProjName').value.trim();
+  if(!name){document.getElementById('err-projName').classList.add('show');return;}
+  const oldName=S.projects[pi].name;
+  S.projects[pi].name=name; S.projects[pi].color=S.selColor;
+  save(); closeModal('newProjModal');
+  if(oldName!==name){
+    try{await fetch(GAS_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'renameProject',oldName,newName:name})});}catch(e){}
+  }
+  const btn=document.getElementById('btnCreateProj');
+  btn.querySelector('.btn-label').textContent='作成'; btn.onclick=createProj;
+  renderSidebar();
+  if(S.curProjIdx===pi)document.getElementById('ph-projName').textContent=name;
+  toast('✓ 更新しました','ok');
+}
+async function deleteProjConfirm(pi){
+  const p=S.projects[pi];
+  if(!confirm(`プロジェクト「${p.name}」を削除しますか？\nASIN ${(p.asins||[]).length}件とDriveフォルダも削除されます。\nこの操作は元に戻せません。`))return;
+  try{await fetch(GAS_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'deleteFolder',project:p.name})});}catch(e){}
+  S.projects.splice(pi,1);
+  if(S.curProjIdx===pi){S.curProjIdx=-1;S.curAsinIdx=-1;document.getElementById('projHome').classList.add('hidden');document.getElementById('noSel').style.display='';}
+  else if(S.curProjIdx>pi)S.curProjIdx--;
+  save(); renderSidebar(); toast('🗑 削除しました');
+}
+
+// ===== PROJ FILES =====
+function handlePfDrop(e){e.preventDefault();document.getElementById('pfDropZone').classList.remove('drag');handlePfFiles({target:{files:e.dataTransfer.files}});}
+async function handlePfFiles(e){const files=Array.from(e.target.files);for(const file of files){await readAndSaveProjFile(file);}if(e.target.value!==undefined)e.target.value='';}
+async function readAndSaveProjFile(file){
+  const proj=S.projects[S.curProjIdx]; if(!proj)return;
+  const content=await readTextFile(file);
+  proj.files=proj.files||[];
+  proj.files.push({name:file.name,type:file.name.split('.').pop(),content,savedAt:new Date().toLocaleDateString('ja-JP')});
+  save();
+  const j=await saveFileToDrive(proj.name,'_project',file.name,content);
+  renderProjFiles();
+  toast(j?.status==='saved'?'☁ Driveに保存: '+file.name:'✓ ローカルに保存: '+file.name,j?.status==='saved'?'ok':'warn');
+}
+function saveProjFile(){
+  const proj=S.projects[S.curProjIdx]; if(!proj)return;
+  const name=document.getElementById('pfName').value.trim();
+  const type=document.getElementById('pfType').value;
+  const content=document.getElementById('pfContent').value.trim();
+  if(!name||!content){toast('⚠ ファイル名と内容を入力してください','warn');return;}
+  proj.files=proj.files||[];
+  const filename=name+'.'+type;
+  proj.files.push({name:filename,type,content,savedAt:new Date().toLocaleDateString('ja-JP')});
+  save();
+  saveFileToDrive(proj.name,'_project',filename,content).then(j=>{toast(j?.status==='saved'?'☁ Driveに保存: '+filename:'✓ ローカルに保存','ok');});
+  renderProjFiles();
+  document.getElementById('pfName').value=''; document.getElementById('pfContent').value='';
+}
+function renderProjFiles(){
+  const proj=S.projects[S.curProjIdx]; if(!proj)return;
+  const files=proj.files||[];
+  const el=document.getElementById('projFileList');
+  if(!files.length){el.innerHTML='';return;}
+  el.innerHTML='<div class="panel"><div class="panel-header"><div class="panel-num">02</div><div class="panel-title">保存済みファイル</div></div><div class="panel-body">'+
+    files.map((f,i)=>`<div class="file-item"><div style="font-size:16px">${f.type==='md'?'📝':f.type==='csv'?'📊':'📄'}</div><div class="file-name">${f.name}</div><div class="file-meta">${f.savedAt}</div><button class="btn btn-sm" onclick="dlProjFile(${i})">↓</button><button class="btn btn-sm btn-danger" onclick="delProjFile(${i})">削除</button></div>`).join('')+
+  '</div></div>';
+}
+function dlProjFile(i){const proj=S.projects[S.curProjIdx];const f=proj.files[i];const el=document.createElement('a');el.href=URL.createObjectURL(new Blob([f.content],{type:'text/plain'}));el.download=f.name;el.click();}
+async function delProjFile(i){
+  const proj=S.projects[S.curProjIdx]; const f=proj.files[i];
+  if(!confirm('「'+f.name+'」を削除しますか？'))return;
+  try{
+    const res=await fetch(GAS_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'deleteFile',project:proj.name,asin:'_project',filename:f.name})});
+    const json=await res.json();
+    if(json.status!=='deleted'){toast('⚠ Drive削除失敗: '+(json.status||json.error),'err');return;}
+    proj.files.splice(i,1);save();renderProjFiles();toast('🗑 削除しました');
+  }catch(e){toast('⚠ Drive削除エラー','err');}
+}
+
+// ===== ASIN =====
+function openNewAsin(){
+  if(S.curProjIdx<0)return;
+  document.getElementById('newAsinModal').classList.add('open');
+  document.getElementById('newAsinCode').value='';
+  document.getElementById('newAsinNote').value='';
+  document.getElementById('newAsinThumb').value='';
+  document.getElementById('err-asinCode').classList.remove('show');
+  document.getElementById('newAsinCode').classList.remove('is-error');
+  setTimeout(()=>document.getElementById('newAsinCode').focus(),100);
+}
+async function createAsin(){
+  const code=document.getElementById('newAsinCode').value.trim().toUpperCase();
+  const note=document.getElementById('newAsinNote').value.trim();
+  const thumb=document.getElementById('newAsinThumb').value.trim();
+  const errEl=document.getElementById('err-asinCode');
+  if(!code||!/^[A-Z0-9]{10}$/.test(code)){
+    errEl.textContent='有効なASINを入力してください（例：B0BZBKS46P）';
+    errEl.classList.add('show');
+    document.getElementById('newAsinCode').classList.add('is-error'); return;
+  }
+  const p=S.projects[S.curProjIdx];
+  if((p.asins||[]).some(a=>a.code===code)){
+    errEl.textContent='このASINはすでに追加されています';
+    errEl.classList.add('show'); return;
+  }
+  errEl.classList.remove('show');
+  document.getElementById('newAsinCode').classList.remove('is-error');
+  setLoading('btnCreateAsin',true);
+  p.asins=p.asins||[];
+  p.asins.push({code,note,thumb,title:'',bullets:'',description:'',images:[],reviews:[],keywords:[],files:[]});
+  save(); closeModal('newAsinModal');
+  try{await fetch(GAS_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'createAsinFolder',project:p.name,asin:code,note:note||'',thumb:thumb||''})});}catch(e){}
+  setLoading('btnCreateAsin',false);
+  renderSidebar(); renderProjDashboard();
+  selectAsin(S.curProjIdx,p.asins.length-1);
+  toast('✓ '+code+' を追加','ok');
+}
+
+async function selectAsin(pi,ai){
+  S.curProjIdx=pi; S.curAsinIdx=ai; renderSidebar();
+  document.getElementById('noSel').style.display='none';
+  document.getElementById('projHome').classList.add('hidden');
+  document.getElementById('asinView').classList.remove('hidden');
+  const proj=S.projects[pi]; const asin=proj.asins[ai];
+  document.getElementById('bc').innerHTML=`<span>${proj.name}</span><span class="bsep">/</span><span>${asin.code}</span>${asin.note?`<span style="color:var(--muted2);font-size:10px">(${asin.note})</span>`:''}`;
+  switchTab(S.curTab,null);
+  renderAsinHeader();renderInfoTab();renderReviews();renderKeywords();renderFiles();updateTabCounts();
+  await loadFromDriveIfNewer(pi,ai);
+  renderAsinHeader();renderInfoTab();renderReviews();renderKeywords();renderFiles();updateTabCounts();
+}
+
+function updateTabCounts(){
+  const a=getAsin(); if(!a)return;
+  document.getElementById('tc-reviews').textContent=a.reviews?.length||0;
+  document.getElementById('tc-keywords').textContent=a.keywords?.length||0;
+  document.getElementById('tc-files').textContent=(a.files?.length||0)+(a.images?.length||0);
+}
+
+function openDeleteAsinModal(){
+  const a=getAsin(); if(!a)return;
+  document.getElementById('deleteAsinInfo').innerHTML=
+    `<strong>ASIN: ${a.code}</strong>${a.note?' ('+a.note+')':''}<br>`+
+    `レビュー ${a.reviews?.length||0}件・KW ${a.keywords?.length||0}件・画像 ${a.images?.length||0}枚・ファイル ${a.files?.length||0}件`;
+  document.getElementById('deleteAsinModal').classList.add('open');
+}
+async function confirmDeleteAsin(){
+  setLoading('btnConfirmDelete',true);
+  const proj=S.projects[S.curProjIdx]; const asin=proj.asins[S.curAsinIdx];
+  try{
+    const res=await fetch(GAS_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'deleteFolder',project:proj.name,asin:asin.code})});
+    const json=await res.json();
+    if(json.status!=='deleted'){toast('⚠ Drive削除失敗: '+(json.status||json.error),'err');setLoading('btnConfirmDelete',false);return;}
+    proj.asins.splice(S.curAsinIdx,1);
+    save();S.curAsinIdx=-1;closeModal('deleteAsinModal');
+    setLoading('btnConfirmDelete',false);
+    renderSidebar();selectProj(S.curProjIdx);toast('🗑 削除しました');
+  }catch(e){toast('⚠ Drive削除エラー','err');setLoading('btnConfirmDelete',false);}
+}
+
+function getAsin(){return S.projects[S.curProjIdx]?.asins[S.curAsinIdx];}
+
+// ===== ASIN HEADER =====
+function renderAsinHeader(){
+  const a=getAsin(); if(!a)return;
+  const syncState=document.getElementById('statusText')?.textContent||'';
+  document.getElementById('asinHeader').innerHTML=`
+    <div class="asin-thumb">${a.thumb?`<img src="${a.thumb}" onerror="this.style.display='none'">`:'📦'}</div>
+    <div class="asin-meta">
+      <div class="asin-title-text" title="${a.title||a.note||a.code}">${a.title||a.note||a.code}</div>
+      <div class="asin-code">${a.code}</div>
+      <div class="asin-tags">
+        ${a.reviews?.length?`<span class="asin-tag">レビュー ${a.reviews.length}件</span>`:''}
+        ${a.keywords?.length?`<span class="asin-tag">KW ${a.keywords.length}件</span>`:''}
+        ${a.images?.length?`<span class="asin-tag">画像 ${a.images.length}枚</span>`:''}
+        ${a.folderUrl?`<a href="${a.folderUrl}" target="_blank" class="asin-tag asin-tag-link">Drive ↗</a>`:''}
+      </div>
+      <div class="asin-sync ${syncState.includes('保存')||syncState.includes('読込')?'ok':syncState.includes('エラー')?'warn':''}">${syncState?'● '+syncState:''}</div>
+    </div>
+    <a href="https://www.amazon.co.jp/dp/${a.code}" target="_blank" class="btn btn-sm">Amazon ↗</a>`;
+}
+
+// ===== TABS =====
+function switchTab(tab,el){
+  S.curTab=tab;
+  document.querySelectorAll('#asinView .tab').forEach(t=>t.classList.remove('active'));
+  if(el){el.classList.add('active');}
+  else{const tabMap={info:0,reviews:1,keywords:2,files:3};const tabs=document.querySelectorAll('#asinView .tab');if(tabMap[tab]!==undefined)tabs[tabMap[tab]]?.classList.add('active');}
+  ['info','reviews','keywords','files'].forEach(t=>document.getElementById('tab-'+t)?.classList.toggle('hidden',t!==tab));
+}
+
+// ===== INFO TAB =====
+function renderInfoTab(){
+  const a=getAsin(); if(!a)return;
+  document.getElementById('f-title').value=a.title||'';
+  document.getElementById('f-bullets').value=a.bullets||'';
+  document.getElementById('f-desc').value=a.description||'';
+  renderImages();
+}
+async function saveInfoField(){
+  const a=getAsin(); if(!a)return;
+  setLoading('btnSaveInfo',true);setLoading('btnSaveInfo2',true);
+  a.title=document.getElementById('f-title').value;
+  a.bullets=document.getElementById('f-bullets').value;
+  a.description=document.getElementById('f-desc').value;
+  if(!a.title)a.title=a.note||a.code;
+  await saveAndSync();
+  renderAsinHeader();
+  flashBtn('btnSaveInfo','ok');flashBtn('btnSaveInfo2','ok');
+  setLoading('btnSaveInfo',false);setLoading('btnSaveInfo2',false);
+}
+
+// ===== IMAGES =====
+function openImageAdd(){
+  document.getElementById('imgModal').classList.add('open');
+  document.getElementById('imgUploadStatus').textContent='';
+  document.getElementById('imgLabel').value='';
+  setTimeout(()=>document.getElementById('imgLabel').focus(),100);
+}
+async function handleImageFiles(e){
+  const files=Array.from(e.target.files); if(!files.length)return;
+  const a=getAsin(); if(!a)return;
+  const proj=S.projects[S.curProjIdx];
+  const label=document.getElementById('imgLabel').value.trim();
+  a.images=a.images||[];
+  const statusEl=document.getElementById('imgUploadStatus');
+  statusEl.textContent=`0 / ${files.length} 件アップロード中...`;
+  for(let i=0;i<files.length;i++){
+    const file=files[i];
+    const base64=await fileToBase64(file);
+    const filename=file.name;
+    const dataUrl=await fileToDataUrl(file);
+    const imgObj={url:dataUrl,driveFilename:filename,label:label||file.name,mimeType:file.type,driveUrl:''};
+    a.images.push(imgObj);renderImages();
+    try{
+      const res=await fetch(GAS_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'saveImage',project:proj.name,asin:a.code,filename,base64,mimeType:file.type})});
+      const json=await res.json();
+      if(json.driveUrl){imgObj.url=json.driveUrl;imgObj.driveUrl=json.driveUrl;}
+    }catch(err){}
+    a.images[a.images.length-1]={...imgObj,url:imgObj.driveUrl||imgObj.driveFilename};
+    save();renderImages();
+    statusEl.textContent=`${i+1} / ${files.length} 件完了`;
+  }
+  renderAsinHeader();updateTabCounts();
+  statusEl.textContent=`✓ ${files.length}件をDriveに保存しました`;
+  e.target.value='';
+}
+function fileToBase64(file){return new Promise((res,rej)=>{const r=new FileReader();r.onload=e=>res(e.target.result.split(',')[1]);r.onerror=rej;r.readAsDataURL(file);});}
+function fileToDataUrl(file){return new Promise((res,rej)=>{const r=new FileReader();r.onload=e=>res(e.target.result);r.onerror=rej;r.readAsDataURL(file);});}
+function renderImages(){
+  const a=getAsin(); if(!a)return;
+  const imgs=a.images||[];
+  const grid=document.getElementById('imgGrid');
+  const empty=document.getElementById('imgEmpty');
+  if(!imgs.length){grid.innerHTML='';empty.style.display='';return;}
+  empty.style.display='none';
+  grid.innerHTML=imgs.map((img,i)=>`
+    <div>
+      <div class="img-card">
+        <img src="${img.url}" onerror="this.parentElement.style.background='var(--surface2)'">
+        <div class="img-overlay">
+          <button class="btn btn-sm" onclick="dlImgData(${i})">↓</button>
+          <button class="btn btn-sm" style="color:#ffaaaa;border-color:#ffaaaa" onclick="delImg(${i})">✕</button>
+        </div>
+      </div>
+      <div class="img-label">${img.label||img.driveFilename||'画像'}</div>
+    </div>`).join('');
+}
+function dlImgData(idx){const a=getAsin();if(!a)return;const img=a.images[idx];const el=document.createElement('a');el.href=img.url;el.download=img.driveFilename||img.label||'image';el.click();}
+async function delImg(i){
+  const a=getAsin();const proj=S.projects[S.curProjIdx];const img=a.images[i];
+  if(!confirm('「'+(img.driveFilename||img.label)+'」を削除しますか？'))return;
+  try{
+    const res=await fetch(GAS_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'deleteFile',project:proj.name,asin:a.code,filename:img.driveFilename||img.label})});
+    const json=await res.json();
+    if(json.status!=='deleted'){toast('⚠ Drive削除失敗: '+(json.status||json.error),'err');return;}
+    a.images.splice(i,1);save();renderImages();renderAsinHeader();updateTabCounts();toast('🗑 削除しました');
+  }catch(e){toast('⚠ Drive削除エラー','err');}
+}
+
+// ===== FILE UPLOAD =====
+function triggerUpload(type){document.getElementById('fileInput-'+type).click();}
+function handleDrop(e,type){e.preventDefault();e.currentTarget.classList.remove('drag');const f=e.dataTransfer.files[0];if(f)processFile(f,type);}
+function handleFileInput(e,type){const f=e.target.files[0];if(f)processFile(f,type);e.target.value='';}
+function processFile(file,type){
+  const ext=file.name.split('.').pop().toLowerCase();
+  if(['xlsx','xls'].includes(ext)){
+    const reader=new FileReader();
+    reader.onload=e=>{const wb=XLSX.read(e.target.result,{type:'array'});const ws=wb.Sheets[wb.SheetNames[0]];const csv=XLSX.utils.sheet_to_csv(ws);if(type==='kw')parseKw(csv);else parseReview(csv,type);};
+    reader.readAsArrayBuffer(file);
+  }else if(ext==='csv'){
+    const reader=new FileReader();
+    reader.onload=e=>{if(type==='kw')parseKw(e.target.result);else parseReview(e.target.result,type);};
+    reader.readAsText(file,'UTF-8');
+  }else{toast('⚠ xlsx/xls/csvのみ対応','warn');}
+}
+
+// ===== REVIEWS =====
+function parseReview(csv,type){
+  const a=getAsin(); if(!a)return;
+  const lines=csv.split('\n').filter(l=>l.trim());
+  if(lines.length<2){toast('⚠ データなし','warn');return;}
+  const headers=lines[0].split(',').map(h=>h.replace(/"/g,'').trim());
+  const ratingIdx=findIdx(headers,['星評価','rating','評価','星','rate']);
+  const textIdx=findIdx(headers,['内容','content','レビュー','body','コメント','text']);
+  const dateIdx=findIdx(headers,['レビュー時間','date','日付','日時','time','created']);
+  const linkIdx=findIdx(headers,['レビューリンク','link','url']);
+  const titleIdx=findIdx(headers,['タイトル','title']);
+  a.reviews=a.reviews||[];
+  let added=0;
+  const existLinks=new Set(a.reviews.map(r=>r.link).filter(Boolean));
+  for(let i=1;i<lines.length;i++){
+    const cols=smartSplit(lines[i]);
+    const link=linkIdx>=0?cols[linkIdx]?.replace(/"/g,'').trim():'';
+    if(link&&existLinks.has(link))continue;
+    const rating=parseFloat(cols[ratingIdx>=0?ratingIdx:0])||0;
+    const text=(cols[textIdx>=0?textIdx:1]||'').replace(/"/g,'').trim();
+    const date=(cols[dateIdx>=0?dateIdx:-1]||'').replace(/"/g,'').trim();
+    const title=(cols[titleIdx>=0?titleIdx:-1]||'').replace(/"/g,'').trim();
+    if(!text)continue;
+    a.reviews.push({rating,text,date,link,title,type:classifyRev(rating),src:type});
+    if(link)existLinks.add(link);
+    added++;
+  }
+  // スロット状態更新
+  const slot=document.getElementById('slot-'+type);
+  const cnt=document.getElementById('sc-'+type);
+  if(slot)slot.classList.add('loaded');
+  if(cnt)cnt.textContent=added+'件追加';
+  document.getElementById('uploadStatus').textContent=`${type==='rec'?'おすすめ':type==='pos'?'肯定':'否定'}順: +${added}件追加（重複除去済み）`;
+  saveAndSync();renderReviews();renderAsinHeader();updateTabCounts();
+  toast(`✓ ${added}件追加（重複除去済み）`,'ok');
+}
+function findIdx(headers,candidates){for(const c of candidates){const i=headers.findIndex(h=>h.includes(c));if(i>=0)return i;}return -1;}
+function smartSplit(line){const r=[];let cur='',inQ=false;for(let i=0;i<line.length;i++){if(line[i]==='"'){inQ=!inQ;continue;}if(line[i]===','&&!inQ){r.push(cur);cur='';continue;}cur+=line[i];}r.push(cur);return r;}
+function classifyRev(rating){if(rating<=3)return 'pain';if(rating>=4)return 'good';return 'neutral';}
+
+function renderReviews(){
+  const a=getAsin();const reviews=a?.reviews||[];
+  if(!reviews.length){document.getElementById('revResults').classList.add('hidden');document.getElementById('revEmpty').style.display='';return;}
+  document.getElementById('revEmpty').style.display='none';
+  document.getElementById('revResults').classList.remove('hidden');
+  const pain=reviews.filter(r=>r.type==='pain');
+  const good=reviews.filter(r=>r.type==='good');
+  const avg=reviews.reduce((s,r)=>s+r.rating,0)/reviews.length;
+  document.getElementById('sumGrid').innerHTML=`
+    <div class="sum-card"><div class="sum-num">${reviews.length}</div><div class="sum-label">ユニークレビュー</div></div>
+    <div class="sum-card"><div class="sum-num num-yellow">${avg.toFixed(1)}</div><div class="sum-label">平均評価</div></div>
+    <div class="sum-card"><div class="sum-num num-red">${pain.length}</div><div class="sum-label">否定（★1-3）</div></div>
+    <div class="sum-card"><div class="sum-num num-green">${good.length}</div><div class="sum-label">肯定（★4-5）</div></div>`;
+  const painKw=extractKw(pain.map(r=>r.text));
+  const goodKw=extractKw(good.map(r=>r.text));
+  document.getElementById('insightBody').innerHTML=`
+    <div class="insight pain"><div class="insight-title">ペインポイント（不満の声）</div><div class="kw-list">${painKw.map(w=>`<span class="kw-tag kw-pain">${w}</span>`).join('')||'<span style="color:var(--muted);font-size:11px">データ不足</span>'}</div></div>
+    <div class="insight"><div class="insight-title">訴求ワード（高評価の声）</div><div class="kw-list">${goodKw.map(w=>`<span class="kw-tag kw-good">${w}</span>`).join('')||'<span style="color:var(--muted);font-size:11px">データ不足</span>'}</div></div>`;
+  renderRevTable(S.revFilter);
+}
+function extractKw(texts){const j=texts.join(' ');const pats=['使いやすい','使いにくい','滑る','すべる','壊れ','丈夫','軽い','重い','便利','不便','挟みやすい','挟みにくい','先端','グリップ','コーティング','傷','錆','洗いやすい','お弁当','細かい','つかみやすい','つかみにくい','精度','品質','コスパ','滑り止め','フィット','疲れ','盛り付け','料理','シリコン','ステンレス','力が入り','やわらかい','小さい','薄い'];const res={};pats.forEach(p=>{const m=j.match(new RegExp(p,'g'));if(m)res[p]=(res[p]||0)+m.length;});return Object.entries(res).sort((a,b)=>b[1]-a[1]).slice(0,10).map(([w])=>w);}
+function filterRev(f,el){S.revFilter=f;document.querySelectorAll('#tab-reviews .f-btn').forEach(b=>b.classList.remove('active'));el.classList.add('active');renderRevTable(f);}
+function renderRevTable(filter){
+  const a=getAsin();const reviews=(a?.reviews||[]).filter(r=>filter==='all'||r.type===filter);
+  document.getElementById('revBody').innerHTML=reviews.slice(0,150).map(r=>`
+    <tr>
+      <td><span class="stars ${r.rating>=4?'s-high':'s-low'}">${'★'.repeat(Math.max(1,Math.round(r.rating)))}${'☆'.repeat(5-Math.max(1,Math.round(r.rating)))}</span></td>
+      <td>${r.title?`<div style="font-size:11px;font-weight:500;margin-bottom:3px;color:var(--muted)">${r.title}</div>`:''}<div class="rev-text">${r.text.slice(0,220)}${r.text.length>220?'…':''}</div></td>
+      <td><span class="tag ${r.type==='pain'?'tag-pain':r.type==='good'?'tag-good':'tag-neutral'}">${r.type==='pain'?'否定':r.type==='good'?'肯定':'中立'}</span></td>
+      <td style="color:var(--muted);font-family:var(--mono);font-size:10px">${r.date||'—'}</td>
+    </tr>`).join('')||'<tr><td colspan="4" style="text-align:center;padding:24px;color:var(--muted)">該当なし</td></tr>';
+}
+function exportReviews(){
+  const a=getAsin();if(!a?.reviews?.length){toast('⚠ レビューなし','warn');return;}
+  let csv='\uFEFF評価,分類,タイトル,レビュー本文,日付\n';
+  a.reviews.forEach(r=>{csv+=`${r.rating},${r.type==='pain'?'否定':r.type==='good'?'肯定':'中立'},"${(r.title||'').replace(/"/g,'""')}","${r.text.replace(/"/g,'""')}",${r.date}\n`;});
+  const el=document.createElement('a');el.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));el.download=a.code+'_reviews.csv';el.click();
+  toast('↓ エクスポート完了');
+}
+
+// ===== KEYWORDS =====
+function parseKw(csv){
+  const a=getAsin();if(!a)return;
+  const lines=csv.split('\n').filter(l=>l.trim());
+  if(lines.length<2){toast('⚠ データなし','warn');return;}
+  const headers=lines[0].split(',').map(h=>h.replace(/"/g,'').trim());
+  const kwIdx=findIdx(headers,['注目キーワード','キーワード','keyword']);
+  const searchIdx=findIdx(headers,['月間検索数','search','検索数']);
+  const trafficIdx=findIdx(headers,['トラフィック比率','traffic']);
+  const rankIdx=findIdx(headers,['自然順位','自然順','rank','順位']);
+  const abaIdx=findIdx(headers,['ABA週順位','aba','ABA']);
+  const typeIdx=findIdx(headers,['キーワードタイプ','タイプ','type']);
+  const ppcIdx=findIdx(headers,['PPC価格','ppc','入札']);
+  a.keywords=[];
+  for(let i=1;i<lines.length;i++){
+    const cols=smartSplit(lines[i]);
+    const kw=(cols[kwIdx>=0?kwIdx:0]||'').replace(/"/g,'').trim();if(!kw)continue;
+    a.keywords.push({kw,search:parseInt((cols[searchIdx>=0?searchIdx:-1]||'0').replace(/[^\d]/g,''))||0,traffic:parseFloat(cols[trafficIdx>=0?trafficIdx:-1])||0,rank:(cols[rankIdx>=0?rankIdx:-1]||'').replace(/"/g,'').trim()||'—',aba:(cols[abaIdx>=0?abaIdx:-1]||'').replace(/"/g,'').trim()||'—',type:(cols[typeIdx>=0?typeIdx:-1]||'').replace(/"/g,'').trim()||'',ppc:(cols[ppcIdx>=0?ppcIdx:-1]||'').replace(/"/g,'').trim()||''});
+  }
+  saveAndSync();renderKeywords();renderAsinHeader();updateTabCounts();
+  toast(`✓ ${a.keywords.length}件のキーワードを読み込み`,'ok');
+}
+function filterKw(f,el){S.kwFilter=f;document.querySelectorAll('#tab-keywords .f-btn').forEach(b=>b.classList.remove('active'));el.classList.add('active');renderKwTable();}
+function renderKeywords(){const a=getAsin();const kws=a?.keywords||[];if(!kws.length){document.getElementById('kwResults').classList.add('hidden');document.getElementById('kwEmpty').style.display='';return;}document.getElementById('kwEmpty').style.display='none';document.getElementById('kwResults').classList.remove('hidden');renderKwTable();}
+function renderKwTable(){
+  const a=getAsin();if(!a)return;
+  const kws=(a.keywords||[]).filter(k=>S.kwFilter==='all'||k.type.includes(S.kwFilter));
+  const maxSearch=Math.max(...kws.map(k=>k.search),1);
+  document.getElementById('kwBody').innerHTML=kws.slice(0,200).map(k=>`<tr><td><div class="kw-name">${k.kw}</div></td><td><div style="display:flex;align-items:center;gap:8px"><span class="kw-num">${k.search.toLocaleString()}</span><div class="kw-bar-wrap"><div class="kw-bar" style="width:${Math.round(k.search/maxSearch*100)}%"></div></div></div></td><td><span class="kw-num">${(k.traffic*100).toFixed(1)}%</span></td><td><span class="kw-num">${k.rank}</span></td><td><span class="kw-num">${k.aba}</span></td><td><span class="badge-type ${k.type.includes('主要')?'badge-main':k.type.includes('ロング')?'badge-long':'badge-other'}">${k.type.slice(0,6)||'—'}</span></td></tr>`).join('')||'<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--muted)">該当なし</td></tr>';
+}
+function exportKw(){const a=getAsin();if(!a?.keywords?.length){toast('⚠ キーワードなし','warn');return;}let csv='\uFEFFキーワード,月間検索数,トラフィック比率,自然順位,ABA週順位,タイプ,PPC\n';a.keywords.forEach(k=>{csv+=`"${k.kw}",${k.search},${k.traffic},${k.rank},${k.aba},"${k.type}","${k.ppc}"\n`;});const el=document.createElement('a');el.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));el.download=a.code+'_keywords.csv';el.click();toast('↓ エクスポート完了');}
+
+// ===== FILES =====
+function handleAfDrop(e){e.preventDefault();document.getElementById('afDropZone').classList.remove('drag');handleAfFiles({target:{files:e.dataTransfer.files}});}
+async function handleAfFiles(e){const files=Array.from(e.target.files);for(const file of files){await readAndSaveAsinFile(file);}if(e.target.value!==undefined)e.target.value='';}
+async function readAndSaveAsinFile(file){
+  const a=getAsin();if(!a)return;const proj=S.projects[S.curProjIdx];
+  const content=await readTextFile(file);
+  a.files=a.files||[];
+  a.files.push({name:file.name,type:file.name.split('.').pop(),content,savedAt:new Date().toLocaleDateString('ja-JP')});
+  saveAndSync();saveFileToDrive(proj.name,a.code,file.name,content);
+  renderFiles();renderAsinHeader();updateTabCounts();
+  toast('✓ '+file.name+' を保存','ok');
+}
+function readTextFile(file){return new Promise((res,rej)=>{const r=new FileReader();r.onload=e=>res(e.target.result);r.onerror=rej;r.readAsText(file,'UTF-8');});}
+
+async function saveFile(){
+  const a=getAsin();if(!a)return;
+  const proj=S.projects[S.curProjIdx];
+  const name=document.getElementById('fName').value.trim();
+  const type=document.getElementById('fType').value;
+  const content=document.getElementById('fContent').value.trim();
+  if(!name||!content){toast('⚠ ファイル名と内容を入力','warn');return;}
+  setLoading('btnSaveFile',true);
+  const filename=name+'.'+type;
+  a.files=a.files||[];
+  a.files.push({name:filename,type,content,savedAt:new Date().toLocaleDateString('ja-JP')});
+  await saveAndSync();
+  await saveFileToDrive(proj.name,a.code,filename,content);
+  renderFiles();renderAsinHeader();updateTabCounts();
+  document.getElementById('fName').value='';document.getElementById('fContent').value='';
+  flashBtn('btnSaveFile','ok');setLoading('btnSaveFile',false);
+  toast('✓ 保存: '+filename,'ok');
+}
+function renderFiles(){
+  const a=getAsin();const files=a?.files||[];const images=a?.images||[];
+  const el=document.getElementById('fileList');let html='';
+  if(images.length){
+    html+='<div class="panel"><div class="panel-header"><div class="panel-num">02</div><div class="panel-title">画像ファイル</div></div><div class="panel-body">';
+    html+=images.map((img,i)=>`<div class="file-item"><div style="font-size:16px">🖼</div><div class="file-name">${img.driveFilename||img.label||'画像'}</div><div class="file-meta">${img.mimeType||''}</div><button class="btn btn-sm" onclick="dlImgData(${i})">↓</button><button class="btn btn-sm btn-danger" onclick="delImg(${i})">削除</button></div>`).join('');
+    html+='</div></div>';
+  }
+  if(files.length){
+    html+='<div class="panel"><div class="panel-header"><div class="panel-num">03</div><div class="panel-title">保存済みファイル</div></div><div class="panel-body">';
+    html+=files.map((f,i)=>`<div class="file-item"><div style="font-size:16px">${f.type==='csv'?'📊':f.type==='md'?'📝':'📄'}</div><div class="file-name">${f.name}</div><div class="file-meta">${f.savedAt}</div><button class="btn btn-sm" onclick="dlFile(${i})">↓</button><button class="btn btn-sm btn-danger" onclick="delFile(${i})">削除</button></div>`).join('');
+    html+='</div></div>';
+  }
+  el.innerHTML=html;
+}
+function dlFile(i){const a=getAsin();const f=a.files[i];const el=document.createElement('a');el.href=URL.createObjectURL(new Blob([f.content],{type:'text/plain'}));el.download=f.name;el.click();}
+async function delFile(i){
+  const a=getAsin();const proj=S.projects[S.curProjIdx];const f=a.files[i];
+  if(!confirm('「'+f.name+'」を削除しますか？'))return;
+  try{
+    const res=await fetch(GAS_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'deleteFile',project:proj.name,asin:a.code,filename:f.name})});
+    const json=await res.json();
+    if(json.status!=='deleted'){toast('⚠ Drive削除失敗: '+(json.status||json.error),'err');return;}
+    a.files.splice(i,1);save();renderFiles();updateTabCounts();toast('🗑 削除しました');
+  }catch(e){toast('⚠ Drive削除エラー','err');}
+}
+
+// ===== MODAL / COLOR =====
+function closeModal(id){
+  document.getElementById(id).classList.remove('open');
+  if(id==='newAsinModal'){
+    document.getElementById('err-asinCode').textContent='有効なASINを入力してください（例：B0BZBKS46P）';
+    document.getElementById('err-asinCode').classList.remove('show');
+    document.getElementById('newAsinCode').classList.remove('is-error');
+  }
+}
+document.querySelectorAll('.modal-bg').forEach(bg=>bg.addEventListener('click',e=>{if(e.target===bg)bg.classList.remove('open');}));
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape')document.querySelectorAll('.modal-bg.open').forEach(m=>m.classList.remove('open'));
+  if(e.key==='Enter'){
+    if(document.getElementById('newProjModal').classList.contains('open'))createProj();
+    else if(document.getElementById('newAsinModal').classList.contains('open'))createAsin();
+  }
+});
+function selColor(el){document.querySelectorAll('.c-dot').forEach(d=>d.classList.remove('sel'));el.classList.add('sel');S.selColor=el.dataset.c;}
+
+// ===== TOAST =====
+function toast(msg,type=''){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.className='toast show'+(type?' '+type:'');
+  clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),2800);
+}
+
+// ===== SYNC WITH DRIVE =====
+async function syncWithDrive(){
+  setLoading('btnSync',true);setStatus('sync','同期中...');
+  try{
+    const res=await fetch(GAS_URL+'?action=listProjects');
+    const json=await res.json();
+    if(json.status==='ok'&&Array.isArray(json.projects)){
+      const driveNames=new Set(json.projects.map(p=>p.name));
+      S.projects=S.projects.filter(p=>driveNames.has(p.name));
+      S.projects=mergeProjects(S.projects,json.projects);
+      S.lastSync=Date.now();save();
+      if(S.curProjIdx>=S.projects.length){S.curProjIdx=-1;S.curAsinIdx=-1;document.getElementById('projHome').classList.add('hidden');document.getElementById('asinView').classList.add('hidden');document.getElementById('noSel').style.display='';}
+      renderSidebar();setStatus('ok','同期完了');
+      toast('☁ Driveと同期しました（'+S.projects.length+'件）','ok');
+    }else{setStatus('err','同期失敗');toast('⚠ 同期失敗','err');}
+  }catch(e){setStatus('err','接続エラー');toast('⚠ Drive接続エラー','err');}
+  setLoading('btnSync',false);
+}
+
+// ===== MERGE =====
+function mergeProjects(localProjects,driveProjects){
+  const map=new Map();
+  (localProjects||[]).forEach(p=>{map.set(p.name,JSON.parse(JSON.stringify(p)));});
+  (driveProjects||[]).forEach(dp=>{
+    if(!map.has(dp.name)){map.set(dp.name,dp);return;}
+    const lp=map.get(dp.name);
+    const asinMap=new Map();
+    (lp.asins||[]).forEach(a=>asinMap.set(a.code,a));
+    (dp.asins||[]).forEach(da=>{
+      const la=asinMap.get(da.code);
+      if(!la){asinMap.set(da.code,da);}
+      else{asinMap.set(da.code,{...la,...da,files:da.files?.length?da.files:la.files,folderId:da.folderId||la.folderId||'',folderUrl:da.folderUrl||la.folderUrl||''});}
+    });
+    map.set(dp.name,{...lp,...dp,color:lp.color||dp.color||'#2d5a3d',files:dp.files?.length?dp.files:(lp.files||[]),folderId:dp.folderId||lp.folderId||'',folderUrl:dp.folderUrl||lp.folderUrl||'',asins:Array.from(asinMap.values())});
+  });
+  return Array.from(map.values());
+}
+
+// ===== INIT =====
+async function loadProjectListFromDrive(){
+  try{
+    const res=await fetch(GAS_URL+'?action=listProjects');
+    const json=await res.json();
+    if(json.status==='ok'&&Array.isArray(json.projects)){
+      S.projects=mergeProjects(S.projects,json.projects);
+      S.lastSync=Date.now();save();renderSidebar();setStatus('ok','Drive接続済み');return true;
+    }
+  }catch(e){setStatus('err','Drive接続失敗');}
+  return false;
+}
+
+async function initApp(){
+  setStatus('sync','接続中...');renderSidebar();
+  await loadProjectListFromDrive();
+  renderSidebar();
+}
+
+window.addEventListener('DOMContentLoaded',initApp);
+</script>
+</body>
+</html>
